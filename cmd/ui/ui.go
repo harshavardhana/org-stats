@@ -7,7 +7,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/caarlos0/org-stats/csv"
 	"github.com/caarlos0/org-stats/orgstats"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
@@ -26,6 +25,7 @@ func NewInitialModel(
 	top int,
 	includeReviewStats bool,
 	csv io.Writer,
+	jw io.Writer,
 ) InitialModel {
 	var s = spinner.NewModel()
 	s.Spinner = spinner.MiniDot
@@ -41,6 +41,7 @@ func NewInitialModel(
 		top:                top,
 		spinner:            s,
 		csv:                csv,
+		json:               jw,
 		loading:            true,
 	}
 }
@@ -60,6 +61,7 @@ type InitialModel struct {
 	includeReviewStats bool
 	top                int
 	csv                io.Writer
+	json               io.Writer
 }
 
 func (m InitialModel) Init() tea.Cmd {
@@ -85,10 +87,12 @@ func (m InitialModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case gotResults:
 		log.Println("got results", len(msg.stats.Logins()), "logins")
 		highlights := NewHighlightsModel(msg.stats, m.top, m.includeReviewStats)
-		return highlights, tea.Batch(
-			writeCsv(m.csv, msg.stats, m.includeReviewStats),
-			highlights.Init(),
-		)
+		if m.json != nil {
+			if _, err := m.json.Write([]byte(msg.stats.JSON())); err != nil {
+				return m, tea.Quit
+			}
+		}
+		return highlights, tea.Batch(highlights.Init())
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "q", "esc":
@@ -142,9 +146,9 @@ func getStats(
 	}
 }
 
-func writeCsv(w io.Writer, stats orgstats.Stats, includeReviews bool) tea.Cmd {
+func writeJSON(w io.Writer, stats orgstats.Stats) tea.Cmd {
 	return func() tea.Msg {
-		if err := csv.Write(w, stats, includeReviews); err != nil {
+		if _, err := w.Write([]byte(stats.JSON())); err != nil {
 			return errMsg{err}
 		}
 		return tea.Quit

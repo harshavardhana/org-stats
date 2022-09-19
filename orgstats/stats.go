@@ -2,6 +2,7 @@ package orgstats
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -12,13 +13,23 @@ import (
 
 // Stat represents an user adds, rms and commits count
 type Stat struct {
-	Additions, Deletions, Commits, Reviews int
+	Additions int    `json:"-"`
+	Deletions int    `json:"-"`
+	Commits   int    `json:"-"`
+	Reviews   int    `json:"-"`
+	Total     int    `json:"commits"` // commits `json:"commits"`
+	HTMLURL   string `json:"url"`     // html_url `json:"url"`
 }
 
 // Stats contains the user->Stat mapping
 type Stats struct {
 	data  map[string]Stat
 	since time.Time
+}
+
+func (s Stats) JSON() string {
+	buf, _ := json.Marshal(s.data)
+	return string(buf)
 }
 
 func (s Stats) Logins() []string {
@@ -181,7 +192,8 @@ func (s *Stats) add(cs *github.ContributorStats) {
 	if cs.GetAuthor() == nil {
 		return
 	}
-	stat := s.data[cs.GetAuthor().GetLogin()]
+	author := cs.GetAuthor().GetLogin()
+	stat := s.data[author]
 	var adds int
 	var rms int
 	var commits int
@@ -196,11 +208,13 @@ func (s *Stats) add(cs *github.ContributorStats) {
 	stat.Additions += adds
 	stat.Deletions += rms
 	stat.Commits += commits
+	stat.Total += cs.GetTotal()
+	stat.HTMLURL = *cs.GetAuthor().HTMLURL
 	if stat.Additions+stat.Deletions+stat.Commits == 0 && !s.since.IsZero() {
 		// ignore users with no activity when running with a since time
 		return
 	}
-	s.data[cs.GetAuthor().GetLogin()] = stat
+	s.data[author] = stat
 }
 
 func repos(ctx context.Context, client *github.Client, org string) ([]*github.Repository, error) {

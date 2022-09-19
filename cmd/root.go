@@ -20,6 +20,7 @@ var (
 	githubURL      string
 	since          string
 	csvPath        string
+	jsonPath       string
 	blacklist      []string
 	top            int
 	includeReviews bool
@@ -45,6 +46,7 @@ func init() {
 	rootCmd.Flags().StringVar(&since, "since", "0s", "time to look back to gather info (0s means everything)")
 	rootCmd.Flags().BoolVar(&includeReviews, "include-reviews", false, "include pull request reviews in the stats")
 	rootCmd.Flags().StringVar(&csvPath, "csv-path", "", "path to write a csv file with all data collected")
+	rootCmd.Flags().StringVar(&jsonPath, "json-path", "", "path to write a json file with data collected")
 
 	rootCmd.CompletionOptions.HiddenDefaultCmd = true
 
@@ -89,6 +91,7 @@ Important notes:
 		userBlacklist, repoBlacklist := buildBlacklists(blacklist)
 
 		var csv io.Writer = io.Discard
+		var json io.Writer = io.Discard
 		if csvPath != "" {
 			if err := os.MkdirAll(filepath.Dir(csvPath), 0o755); err != nil {
 				return fmt.Errorf("failed to create csv file: %w", err)
@@ -99,6 +102,17 @@ Important notes:
 			}
 			defer f.Close()
 			csv = f
+		}
+		if jsonPath != "" {
+			if err := os.MkdirAll(filepath.Dir(jsonPath), 0o755); err != nil {
+				return fmt.Errorf("failed to create json file: %w", err)
+			}
+			f, err := os.OpenFile(jsonPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
+			if err != nil {
+				return fmt.Errorf("failed to create json file: %w", err)
+			}
+			defer f.Close()
+			json = f
 		}
 
 		f, err := tea.LogToFile(filepath.Join(os.TempDir(), "org-stats.log"), "org-stats")
@@ -121,6 +135,7 @@ Important notes:
 			top,
 			includeReviews,
 			csv,
+			json,
 		))
 		return p.Start()
 	},
